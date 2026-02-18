@@ -65,8 +65,8 @@
 (comment) @comment
 
 ; ── Target names (assignment LHS) ──
-(target name: (identifier) @property)
-(target name: (wild_key) @property)
+(target_name (identifier) @property)
+(target_name (wild_key) @property)
 
 ; ── Header name ──
 (name_field name: (identifier) @type.definition)
