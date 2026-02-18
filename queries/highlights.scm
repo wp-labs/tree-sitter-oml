@@ -1,14 +1,16 @@
-; OML Syntax Highlighting Queries (default tree-sitter)
+; OML Syntax Highlighting Queries (default / tree-sitter native)
 
 ; ── Keywords ──
 [
   "name"
   "rule"
+  "read"
+  "take"
   "pipe"
+  "fmt"
   "object"
   "collect"
   "match"
-  "fmt"
   "select"
   "from"
   "where"
@@ -16,8 +18,6 @@
   "or"
   "not"
   "in"
-  "read"
-  "take"
 ] @keyword
 
 ; ── Data types ──
@@ -26,40 +26,63 @@
 ; ── Privacy types ──
 (privacy_type) @type.builtin
 
-; ── Built-in functions ──
-(fun_call function: _ @function.builtin)
+; ── Built-in function calls (Now::*) ──
+(fun_call) @function.builtin
 
 ; ── Pipe functions ──
 (pipe_fun) @function.builtin
 
+; ── Operators ──
+"|" @operator
+"=>" @keyword.operator
+"!" @operator
+(sql_op) @operator
+
 ; ── Separator ──
 (separator) @punctuation.special
 
-; ── At ref ──
+; ── @ref ──
 (at_ref) @variable.special
+
+; ── Underscore wildcard ──
+"_" @variable.builtin
+
+; ── Boolean ──
+(boolean) @constant.builtin
 
 ; ── Punctuation ──
 [ "(" ")" "{" "}" "[" "]" ] @punctuation.bracket
 [ "," ";" ":" "=" ] @punctuation.delimiter
-"|" @operator
-"=>" @keyword.operator
-"!" @operator
 
-; ── Literals ──
+; ── Strings ──
 (string) @string
+
+; ── Numbers ──
 (number) @number
 (ip_literal) @number
-(boolean) @constant.builtin
+
+; ── Comments ──
 (comment) @comment
 
-; ── Identifiers ──
-(identifier) @variable
-
-; ── Target names ──
-(target name: _ @property)
+; ── Target names (assignment LHS) ──
+(target name: (identifier) @property)
+(target name: (wild_key) @property)
 
 ; ── Header name ──
-(name_field name: _ @type.definition)
+(name_field name: (identifier) @type.definition)
+(name_field name: (path) @type.definition)
+
+; ── Paths ──
+(path) @string.special
+
+; ── JSON paths ──
+(json_path) @string.special
 
 ; ── Privacy item name ──
 (privacy_item name: (identifier) @property)
+
+; ── Map targets ──
+(map_targets (identifier) @property)
+
+; ── Plain identifiers (fallback) ──
+(identifier) @variable

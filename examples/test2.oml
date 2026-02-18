@@ -1,0 +1,25 @@
+name : fmt_test
+---
+# fmt with @ref
+message = fmt("{}-{}", @user, read(city)) ;
+id = fmt("{}:{}", read(host), read(port)) ;
+
+# pipe with @ref
+result = pipe @data | to_json | base64_encode ;
+
+# more pipe functions
+ts = read(time) | Time::to_ts_zone(0, ms) ;
+host = read(url) | url(host) ;
+is_http = read(url) | starts_with('http://') ;
+status = read(code) | map_to(200) ;
+text = read(escaped) | str_unescape ;
+
+# option arg
+value = read(option:[id, uid, user_id]) ;
+
+# json path
+deep = read(/user/info/name) ;
+
+# wildcard targets
+* = take() ;
+alert* = take() ;

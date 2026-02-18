@@ -1,0 +1,64 @@
+name : csv_example
+rule : /csv/data
+---
+# 基本取值与缺省
+version : chars = Now::time() ;
+pos_sn = read() { _ : chars(FALLBACK) } ;
+
+# object 聚合
+values : obj = object {
+    cpu_free, memory_free : digit = read() ;
+} ;
+
+# collect 数组聚合 + 管道
+ports : array = collect read(keys:[sport, dport]) ;
+ports_json = pipe read(ports) | to_json ;
+first_port = pipe read(ports) | nth(0) ;
+
+# 省略 pipe 关键字的管道写法
+url_host = read(http_url) | url(host) ;
+
+# match
+quarter : chars = match read(month) {
+    in (digit(1), digit(3))   => chars(Q1) ;
+    in (digit(4), digit(6))   => chars(Q2) ;
+    in (digit(7), digit(9))   => chars(Q3) ;
+    in (digit(10), digit(12)) => chars(Q4) ;
+    _ => chars(QX) ;
+} ;
+
+# 双源 match
+X : chars = match (read(city1), read(city2)) {
+    (ip(127.0.0.1), ip(127.0.0.100)) => chars(bj) ;
+    _ => chars(sz) ;
+} ;
+
+# 三源 match
+zone : chars = match (read(city), read(region), read(country)) {
+    (chars(bj), chars(north), chars(cn)) => chars(zone1) ;
+    (chars(sh), chars(east), chars(cn)) => chars(zone2) ;
+    _ => chars(unknown) ;
+} ;
+
+# OR 匹配（单源）
+tier : chars = match read(city) {
+    chars(bj) | chars(sh) | chars(gz) => chars(tier1) ;
+    chars(cd) | chars(wh) => chars(tier2) ;
+    _ => chars(other) ;
+} ;
+
+# OR 匹配（多源）
+priority : chars = match (read(city), read(level)) {
+    (chars(bj) | chars(sh), chars(high)) => chars(priority) ;
+    (chars(gz), chars(low) | chars(mid)) => chars(normal) ;
+    _ => chars(default) ;
+} ;
+
+# SQL
+name, pinying = select name, pinying from example where pinying = read(py) ;
+_, _ = select name, pinying from example where pinying = 'xiaolongnu' ;
+
+---
+# 隐私配置
+src_ip : privacy_ip
+pos_sn : privacy_keymsg

@@ -7,36 +7,40 @@ module.exports = grammar({
 
   word: ($) => $.identifier,
 
-
   rules: {
     source_file: ($) =>
       seq(
         $.header,
         $.separator,
-        optional($.aggregate_section),
-        optional(seq($.separator, optional($.privacy_section))),
+        repeat($.aggregate_item),
+        optional(seq($.separator, repeat($.privacy_item))),
       ),
 
     // ── Comments ──────────────────────────────────────────────────
     comment: (_$) =>
       token(choice(seq("#", /.*/), seq("//", /.*/))),
 
-    // ── Header ────────────────────────────────────────────────────
-    header: ($) =>
-      seq($.name_field, optional($.rule_field)),
-
-    name_field: ($) =>
-      seq("name", ":", field("name", $.path)),
-
-    rule_field: ($) =>
-      seq("rule", ":", field("path", $.rule_path), repeat(seq(",", $.rule_path))),
-
-    // ── Separator ─────────────────────────────────────────────────
+    // ── Separator ────────────────────────────────────────────────
     separator: (_$) => "---",
 
-    // ── Aggregate section ─────────────────────────────────────────
-    aggregate_section: ($) => repeat1($.aggregate_item),
+    // ── Header ───────────────────────────────────────────────────
+    header: ($) => seq($.name_field, optional($.rule_field)),
 
+    name_field: ($) =>
+      seq("name", ":", field("name", choice($.path, $.identifier))),
+
+    rule_field: ($) =>
+      seq(
+        "rule",
+        ":",
+        choice($.path, $.identifier),
+        repeat(choice($.path, $.identifier)),
+      ),
+
+    path: (_$) =>
+      token(prec(-1, /[a-zA-Z_\/][a-zA-Z0-9_.\/\-]+/)),
+
+    // ── Aggregate Items ──────────────────────────────────────────
     aggregate_item: ($) =>
       seq($.target_list, "=", $._eval, ";"),
 
@@ -49,91 +53,133 @@ module.exports = grammar({
         optional(seq(":", field("type", $.data_type))),
       ),
 
-    target_name: ($) => choice($.wild_key, "_"),
+    target_name: ($) => choice("_", $.wild_key, $.identifier),
 
-    // ── Data types ────────────────────────────────────────────────
-    data_type: ($) =>
-      choice(
-        "auto", "ip", "chars", "digit", "float",
-        "time", "bool", "obj", "array",
-      ),
+    wild_key: (_$) =>
+      token(prec(1, /\*[a-zA-Z0-9_]*|[a-zA-Z_][a-zA-Z0-9_]*\*/)),
 
-    // ── Eval expressions ──────────────────────────────────────────
+    // ── Eval expressions ─────────────────────────────────────────
     _eval: ($) =>
       choice(
         $.pipe_expr,
-        $.take_expr,
-        $.read_expr,
         $.fmt_expr,
         $.object_expr,
         $.collect_expr,
         $.match_expr,
         $.sql_expr,
+        $.take_expr,
+        $.read_expr,
         $.value_expr,
         $.fun_call,
       ),
 
-    // ── Take / Read ───────────────────────────────────────────────
+    // ── Read / Take ──────────────────────────────────────────────
     take_expr: ($) =>
       seq("take", "(", optional($.arg_list), ")", optional($.default_body)),
 
     read_expr: ($) =>
       seq("read", "(", optional($.arg_list), ")", optional($.default_body)),
 
+    // ── Arguments ────────────────────────────────────────────────
     arg_list: ($) =>
       seq($._arg, repeat(seq(",", $._arg))),
 
     _arg: ($) =>
-      choice($.option_arg, $.keys_arg, $.get_arg, $.json_path, $.identifier),
+      choice(
+        $.option_arg,
+        $.keys_arg,
+        $.get_arg,
+        $.json_path,
+        $.path,
+        $.identifier,
+      ),
 
     option_arg: ($) =>
-      seq("option", ":", "[", $.identifier, repeat(seq(",", $.identifier)), "]"),
+      seq(
+        "option",
+        ":",
+        "[",
+        $.identifier,
+        repeat(seq(",", $.identifier)),
+        "]",
+      ),
 
     keys_arg: ($) =>
-      seq(choice("in", "keys"), ":", "[", $.key_item, repeat(seq(",", $.key_item)), "]"),
-
-    key_item: ($) => $.wild_key,
+      seq(
+        choice("in", "keys"),
+        ":",
+        "[",
+        choice($.wild_key, $.identifier),
+        repeat(seq(",", choice($.wild_key, $.identifier))),
+        "]",
+      ),
 
     get_arg: ($) =>
       seq("get", ":", choice($.identifier, $.number, $.string)),
 
+    json_path: (_$) =>
+      token(prec(-1, /\/[a-zA-Z0-9_\[\].*][a-zA-Z0-9_\[\].\/*]*/)),
+
+    // ── Default body ─────────────────────────────────────────────
     default_body: ($) =>
-      seq("{", "_", ":", $._gen_acq, optional(";"), "}"),
-
-    _gen_acq: ($) =>
-      choice($.take_expr, $.read_expr, $.value_expr, $.fun_call),
-
-    // ── Value expression ──────────────────────────────────────────
-    value_expr: ($) =>
-      prec(2, seq($.data_type, "(", $._literal, ")")),
-
-    _literal: ($) =>
-      choice($.string, $.number, $.ip_literal, $.boolean, $.identifier),
-
-    // ── Function call ─────────────────────────────────────────────
-    fun_call: ($) =>
       seq(
-        field("function", choice("Now::time", "Now::date", "Now::hour")),
-        "(", ")",
+        "{",
+        "_",
+        ":",
+        choice($.take_expr, $.read_expr, $.value_expr, $.fun_call),
+        optional(";"),
+        "}",
       ),
 
-    // ── Fmt expression ────────────────────────────────────────────
-    fmt_expr: ($) =>
+    // ── Value expression ─────────────────────────────────────────
+    value_expr: ($) =>
+      seq($.data_type, "(", $._literal, ")"),
+
+    // ── Data types ───────────────────────────────────────────────
+    data_type: (_$) =>
+      choice(
+        "auto", "ip", "chars", "digit", "float",
+        "time", "bool", "obj", "array",
+      ),
+
+    // ── Built-in function calls ──────────────────────────────────
+    fun_call: (_$) =>
       seq(
-        "fmt", "(",
-        $.string, ",",
-        $.var_get, repeat(seq(",", $.var_get)),
+        choice("Now::time", "Now::date", "Now::hour"),
+        "(",
         ")",
       ),
 
-    // ── Pipe expression ───────────────────────────────────────────
+    // ── Format expression ────────────────────────────────────────
+    fmt_expr: ($) =>
+      seq(
+        "fmt",
+        "(",
+        $.string,
+        ",",
+        $.var_get,
+        repeat(seq(",", $.var_get)),
+        ")",
+      ),
+
+    // ── Variable get ─────────────────────────────────────────────
+    var_get: ($) =>
+      choice(
+        seq(choice("read", "take"), "(", optional($.arg_list), ")"),
+        $.at_ref,
+      ),
+
+    at_ref: ($) => seq("@", $.identifier),
+
+    // ── Pipe expression ──────────────────────────────────────────
     pipe_expr: ($) =>
-      prec(3, seq(
+      seq(
         optional("pipe"),
         $.var_get,
-        "|", $.pipe_fun,
+        "|",
+        $.pipe_fun,
         repeat(seq("|", $.pipe_fun)),
-      )),
+      ),
 
     pipe_fun: ($) =>
       choice(
@@ -141,8 +187,21 @@ module.exports = grammar({
         seq("get", "(", $.identifier, ")"),
         seq("base64_decode", "(", optional($.identifier), ")"),
         seq("path", "(", choice("name", "path"), ")"),
-        seq("url", "(", choice("domain", "host", "uri", "path", "params"), ")"),
-        seq("Time::to_ts_zone", "(", optional("-"), $.number, ",", choice("ms", "us", "ss", "s"), ")"),
+        seq(
+          "url",
+          "(",
+          choice("domain", "host", "uri", "path", "params"),
+          ")",
+        ),
+        seq(
+          "Time::to_ts_zone",
+          "(",
+          optional("-"),
+          $.number,
+          ",",
+          choice("ms", "us", "ss", "s"),
+          ")",
+        ),
         seq("starts_with", "(", $.string, ")"),
         seq("map_to", "(", choice($.string, $.number, $.boolean), ")"),
         "base64_encode",
@@ -163,22 +222,17 @@ module.exports = grammar({
         "extract_subject_object",
       ),
 
-    // ── Var get ───────────────────────────────────────────────────
-    var_get: ($) =>
-      choice(
-        seq("read", "(", optional($.arg_list), ")"),
-        seq("take", "(", optional($.arg_list), ")"),
-        $.at_ref,
-      ),
-
-    at_ref: ($) => seq("@", $.identifier),
-
-    // ── Object expression ─────────────────────────────────────────
+    // ── Object expression ────────────────────────────────────────
     object_expr: ($) =>
       seq("object", "{", repeat1($.map_item), "}"),
 
     map_item: ($) =>
-      seq($.map_targets, "=", $._sub_acq, optional(";")),
+      seq(
+        $.map_targets,
+        "=",
+        choice($.take_expr, $.read_expr, $.value_expr, $.fun_call),
+        optional(";"),
+      ),
 
     map_targets: ($) =>
       seq(
@@ -187,28 +241,29 @@ module.exports = grammar({
         optional(seq(":", $.data_type)),
       ),
 
-    _sub_acq: ($) =>
-      choice($.take_expr, $.read_expr, $.value_expr, $.fun_call),
+    // ── Collect expression ───────────────────────────────────────
+    collect_expr: ($) => seq("collect", $.var_get),
 
-    // ── Collect expression ────────────────────────────────────────
-    collect_expr: ($) =>
-      seq("collect", $.var_get),
-
-    // ── Match expression ──────────────────────────────────────────
+    // ── Match expression ─────────────────────────────────────────
     match_expr: ($) =>
       choice(
         // Single source
         seq(
-          "match", $.var_get, "{",
+          "match",
+          $.var_get,
+          "{",
           repeat1($.case_arm),
           optional($.default_arm),
           "}",
         ),
         // Multi source
         seq(
-          "match", "(",
-          $.var_get, ",", $.var_get, repeat(seq(",", $.var_get)),
-          ")", "{",
+          "match",
+          "(",
+          $.var_get,
+          repeat1(seq(",", $.var_get)),
+          ")",
+          "{",
           repeat1($.multi_case_arm),
           optional($.default_arm),
           "}",
@@ -220,8 +275,14 @@ module.exports = grammar({
 
     multi_case_arm: ($) =>
       seq(
-        "(", $.condition, ",", $.condition, repeat(seq(",", $.condition)), ")",
-        "=>", $._calc, optional(","), optional(";"),
+        "(",
+        $.condition,
+        repeat1(seq(",", $.condition)),
+        ")",
+        "=>",
+        $._calc,
+        optional(","),
+        optional(";"),
       ),
 
     default_arm: ($) =>
@@ -234,54 +295,76 @@ module.exports = grammar({
       seq($._cond_atom, repeat(seq("|", $._cond_atom))),
 
     _cond_atom: ($) =>
-      choice(
-        $.in_condition,
-        $.not_condition,
-        $.value_expr,
-      ),
+      choice($.in_condition, $.not_condition, $.value_expr),
 
     in_condition: ($) =>
       seq("in", "(", $.value_expr, ",", $.value_expr, ")"),
 
-    not_condition: ($) =>
-      seq("!", $.value_expr),
+    not_condition: ($) => seq("!", $.value_expr),
 
-    // ── SQL expression ────────────────────────────────────────────
+    // ── SQL expression ───────────────────────────────────────────
     sql_expr: ($) =>
       seq(
-        "select", $.sql_columns, "from", $.identifier,
-        "where", $.sql_condition,
+        "select",
+        $.sql_columns,
+        "from",
+        $.identifier,
+        "where",
+        $.sql_condition,
       ),
 
     sql_columns: ($) =>
-      choice(
-        "*",
-        seq($.identifier, repeat(seq(",", $.identifier))),
-      ),
+      choice("*", seq($.identifier, repeat(seq(",", $.identifier)))),
 
     sql_condition: ($) =>
-      seq($._sql_cond_expr, repeat(seq(choice("and", "or"), $._sql_cond_expr))),
+      prec.left(seq($._sql_term, repeat(seq(choice("and", "or"), $._sql_term)))),
 
-    _sql_cond_expr: ($) =>
+    _sql_term: ($) =>
       choice(
         $.sql_comparison,
-        seq("not", $._sql_cond_expr),
+        $.sql_not,
         seq("(", $.sql_condition, ")"),
       ),
 
     sql_comparison: ($) =>
-      seq(
-        choice($.identifier, seq($.identifier, "(", $.var_get, ")")),
-        choice("=", "!=", "<", ">", "<=", ">="),
-        choice($.read_expr, $.take_expr, $.fun_call, $.string, $.number,
-               seq($.identifier, "(", $.var_get, ")")),
+      seq($.identifier, $.sql_op, $._sql_rhs),
+
+    sql_op: (_$) => choice("=", "!=", "<", ">", "<=", ">="),
+
+    _sql_rhs: ($) =>
+      choice(
+        $.sql_fun_call,
+        $.read_expr,
+        $.take_expr,
+        $.fun_call,
+        $.string,
+        $.number,
       ),
 
-    // ── Privacy section ───────────────────────────────────────────
-    privacy_section: ($) => repeat1($.privacy_item),
+    sql_fun_call: ($) =>
+      seq(
+        $.identifier,
+        "(",
+        choice(
+          $.read_expr,
+          $.take_expr,
+          $.fun_call,
+          $.string,
+          $.number,
+          $.identifier,
+        ),
+        ")",
+      ),
 
+    sql_not: ($) => seq("not", $.sql_condition),
+
+    // ── Privacy items ────────────────────────────────────────────
     privacy_item: ($) =>
-      seq(field("name", $.identifier), ":", field("type", $.privacy_type)),
+      seq(
+        field("name", $.identifier),
+        ":",
+        field("type", $.privacy_type),
+      ),
 
     privacy_type: (_$) =>
       choice(
@@ -298,32 +381,32 @@ module.exports = grammar({
         "privacy_keymsg",
       ),
 
-    // ── Paths and identifiers ─────────────────────────────────────
-    rule_path: (_$) => /[A-Za-z0-9_.\/*-]+/,
+    // ── Literals ─────────────────────────────────────────────────
+    _literal: ($) =>
+      choice(
+        $.string,
+        $.number,
+        $.ip_literal,
+        $.boolean,
+        $.identifier,
+        $.path,
+      ),
 
-    path: ($) =>
-      seq($.identifier, repeat(seq(choice("/", "."), $.identifier))),
-
-    wild_path: ($) =>
-      seq($.path, optional("*")),
-
-    wild_key: (_$) => /[a-zA-Z_][a-zA-Z0-9_]*\*?|\*/,
-
-    json_path: (_$) => /\/[a-zA-Z0-9_/\[\].*-]+/,
-
-    // ── Literals ──────────────────────────────────────────────────
     string: (_$) =>
-      token(choice(
-        seq('"', repeat(choice(/[^"\\]/, /\\./)), '"'),
-        seq("'", repeat(choice(/[^'\\]/, /\\./)), "'"),
-      )),
+      token(
+        choice(
+          seq('"', repeat(choice(/[^"\\]/, /\\./)), '"'),
+          seq("'", repeat(choice(/[^'\\]/, /\\./)), "'"),
+        ),
+      ),
 
-    number: (_$) => /\d+(\.\d+)?/,
+    number: (_$) => token(/[0-9]+(\.[0-9]+)?/),
 
-    ip_literal: (_$) => /\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/,
+    ip_literal: (_$) => token(/[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+/),
 
     boolean: (_$) => choice("true", "false"),
 
+    // ── Identifier ───────────────────────────────────────────────
     identifier: (_$) => /[a-zA-Z_][a-zA-Z0-9_]*/,
   },
 });
