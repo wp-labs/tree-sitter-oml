@@ -41,7 +41,7 @@ module.exports = grammar({
       ),
 
     path: (_$) =>
-      token(prec(-1, /[a-zA-Z_\/][a-zA-Z0-9_.\/\-]+/)),
+      token(prec(-1, /[a-zA-Z_\/][a-zA-Z0-9_.\/\-*]+/)),
 
     // ── Static Blocks ──────────────────────────────────────────────
     static_block: ($) =>
@@ -199,7 +199,7 @@ module.exports = grammar({
     pipe_fun: ($) =>
       choice(
         seq("nth", "(", $.number, ")"),
-        seq("get", "(", $.identifier, ")"),
+        seq("get", "(", $.identifier, repeat(seq("/", $.identifier)), ")"),
         seq("base64_decode", "(", optional($.identifier), ")"),
         seq("path", "(", choice("name", "path"), ")"),
         seq(

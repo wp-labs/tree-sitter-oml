@@ -12,7 +12,6 @@ ts = read(time) | Time::to_ts_zone(0, ms) ;
 host = read(url) | url(host) ;
 is_http = read(url) | starts_with('http://') ;
 status = read(code) | map_to(200) ;
-text = read(escaped) | str_unescape ;
 
 # option arg
 value = read(option:[id, uid, user_id]) ;

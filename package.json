@@ -1,6 +1,6 @@
 {
   "name": "tree-sitter-oml",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Tree-sitter grammar for OML (Output Mapping Language)",
   "main": "bindings/node",
   "types": "bindings/node",
