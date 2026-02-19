@@ -12,6 +12,7 @@ module.exports = grammar({
       seq(
         $.header,
         $.separator,
+        repeat($.static_block),
         repeat($.aggregate_item),
         optional(seq($.separator, repeat($.privacy_item))),
       ),
@@ -24,10 +25,12 @@ module.exports = grammar({
     separator: (_$) => "---",
 
     // ── Header ───────────────────────────────────────────────────
-    header: ($) => seq($.name_field, optional($.rule_field)),
+    header: ($) => seq($.name_field, optional($.rule_field), optional($.enable_field)),
 
     name_field: ($) =>
       seq("name", ":", field("name", choice($.path, $.identifier))),
+
+    enable_field: ($) => seq("enable", ":", $.boolean),
 
     rule_field: ($) =>
       seq(
@@ -39,6 +42,13 @@ module.exports = grammar({
 
     path: (_$) =>
       token(prec(-1, /[a-zA-Z_\/][a-zA-Z0-9_.\/\-]+/)),
+
+    // ── Static Blocks ──────────────────────────────────────────────
+    static_block: ($) =>
+      seq("static", "{", repeat1($.static_item), "}"),
+
+    static_item: ($) =>
+      seq($.target, "=", $._eval, ";"),
 
     // ── Aggregate Items ──────────────────────────────────────────
     aggregate_item: ($) =>
@@ -71,6 +81,7 @@ module.exports = grammar({
         $.read_expr,
         $.value_expr,
         $.fun_call,
+        $.identifier,
       ),
 
     // ── Read / Take ──────────────────────────────────────────────
@@ -126,7 +137,7 @@ module.exports = grammar({
         "{",
         "_",
         ":",
-        choice($.take_expr, $.read_expr, $.value_expr, $.fun_call),
+        choice($.take_expr, $.read_expr, $.value_expr, $.fun_call, $.identifier),
         optional(";"),
         "}",
       ),
@@ -140,6 +151,10 @@ module.exports = grammar({
       choice(
         "auto", "ip", "chars", "digit", "float",
         "time", "bool", "obj", "array",
+        "time_iso", "time_3339", "time_2822", "time_timestamp", "time_clf",
+        "url", "domain", "ip_net", "kv", "json", "base64",
+        token(prec(2, /array\/[a-zA-Z_]+/)),
+        token(prec(2, /time\/[a-zA-Z0-9]+/)),
       ),
 
     // ── Built-in function calls ──────────────────────────────────
@@ -208,7 +223,6 @@ module.exports = grammar({
         "html_escape",
         "html_unescape",
         "str_escape",
-        "str_unescape",
         "json_escape",
         "json_unescape",
         "Time::to_ts",
@@ -230,7 +244,7 @@ module.exports = grammar({
       seq(
         $.map_targets,
         "=",
-        choice($.take_expr, $.read_expr, $.value_expr, $.fun_call),
+        choice($.take_expr, $.read_expr, $.value_expr, $.fun_call, $.identifier),
         optional(";"),
       ),
 
@@ -289,18 +303,32 @@ module.exports = grammar({
       seq("_", "=>", $._calc, optional(","), optional(";")),
 
     _calc: ($) =>
-      choice($.read_expr, $.take_expr, $.value_expr, $.collect_expr),
+      choice($.read_expr, $.take_expr, $.value_expr, $.collect_expr, $.identifier),
 
     condition: ($) =>
       seq($._cond_atom, repeat(seq("|", $._cond_atom))),
 
     _cond_atom: ($) =>
-      choice($.in_condition, $.not_condition, $.value_expr),
+      choice($.in_condition, $.not_condition, $.match_fun, $.value_expr),
 
     in_condition: ($) =>
       seq("in", "(", $.value_expr, ",", $.value_expr, ")"),
 
     not_condition: ($) => seq("!", $.value_expr),
+
+    match_fun: ($) =>
+      choice(
+        seq("starts_with", "(", $.string, ")"),
+        seq("ends_with", "(", $.string, ")"),
+        seq("contains", "(", $.string, ")"),
+        seq("regex_match", "(", $.string, ")"),
+        seq("iequals", "(", $.string, ")"),
+        seq("is_empty", "(", ")"),
+        seq("gt", "(", $.number, ")"),
+        seq("lt", "(", $.number, ")"),
+        seq("eq", "(", $.number, ")"),
+        seq("in_range", "(", $.number, ",", $.number, ")"),
+      ),
 
     // ── SQL expression ───────────────────────────────────────────
     sql_expr: ($) =>

@@ -4,6 +4,7 @@
 [
   "name"
   "rule"
+  "enable"
   "read"
   "take"
   "pipe"
@@ -11,6 +12,7 @@
   "object"
   "collect"
   "match"
+  "static"
   "select"
   "from"
   "where"
@@ -31,6 +33,9 @@
 
 ; ── Pipe functions ──
 (pipe_fun) @function.builtin
+
+; ── Match functions ──
+(match_fun) @function.builtin
 
 ; ── Operators ──
 "|" @operator
@@ -67,6 +72,9 @@
 ; ── Target names (assignment LHS) ──
 (target_name (identifier) @property)
 (target_name (wild_key) @property)
+
+; ── Static item targets ──
+(static_item (target (target_name (identifier) @property)))
 
 ; ── Header name ──
 (name_field name: (identifier) @type.definition)
