@@ -25,7 +25,7 @@ module.exports = grammar({
     separator: (_$) => "---",
 
     // ── Header ───────────────────────────────────────────────────
-    header: ($) => seq($.name_field, optional($.rule_field), optional($.enable_field)),
+    header: ($) => seq($.name_field, repeat(choice($.rule_field, $.enable_field))),
 
     name_field: ($) =>
       seq("name", ":", field("name", choice($.path, $.identifier))),

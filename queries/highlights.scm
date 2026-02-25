@@ -20,6 +20,9 @@
   "or"
   "not"
   "in"
+  "option"
+  "keys"
+  "get"
 ] @keyword
 
 ; ── Data types ──
